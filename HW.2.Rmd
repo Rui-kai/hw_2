@@ -1,0 +1,107 @@
+---
+title: "Hw-2"
+author: "Ruikai Cui"
+date: "2024-10-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(maps)
+
+#read data
+data <- read.csv("C:/Users/Lenovo/Desktop/WorldsBestRestaurants.csv")
+head(data)
+
+#UI for application
+ui <- fluidPage(
+  titlePanel("World's Best Restaurants Interactive Map"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("Year", "Select Year Range:",
+                  min = 2002, max = 2024, value = c(2010, 2020), sep = ""),
+      sliderInput("Rank", "Select Rank Range:",
+                  min = 1, max = 50, value = c(1, 50)),
+      textInput("Location", "Search by location:", value = ""),
+      helpText("Use the sliders to filter the scatter plot based on Year and Rank, and the text box to filter by specific location."),
+      tableOutput("filteredTable")
+    ),
+    mainPanel(
+      plotOutput("scatterPlot", brush = brushOpts(id = "plotBrush")),
+      tableOutput("selectionTable")
+    )
+  )
+)
+
+# Define server 
+server <- function(input, output) {
+  # Filtered data based on sliders
+  filteredDataSliders <- reactive({
+    req(input$yearRange, input$rankRange)
+    data %>%
+      filter(year >= input$yearRange[1], year <= input$yearRange[2],
+             rank >= input$rankRange[1], rank <= input$rankRange[2])
+  })
+
+# Filtered data based on location input
+  filteredData <- reactive({
+    data_filtered <- filteredDataSliders()
+    if (input$locationInput != "") {
+      data_filtered <- data_filtered %>% filter(grepl(input$locationInput, paste(country, location), ignore.case = TRUE))
+    }
+    data_filtered
+  })
+
+ # Render the scatter plot on a world map
+  output$scatterPlot <- renderPlot({
+    if (nrow(filteredData()) > 0) {
+      world_map <- map_data("world")
+      ggplot() +
+        geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill = "#D2B48C", color = "white") + #notice using correct longitude and latitude on x,y axes.
+        geom_point(data = filteredData(), aes(x = lng, y = lat, color = rank), alpha = 0.6) +
+  
+        coord_quickmap()+
+        labs(title = "Best Restaurants In The World",
+             x = "Longitude",
+             y = "Latitude",
+             color = "Rank") +
+        theme(plot.title = element_text(size = 20, face = "bold", hjust = 0.5))
+    }
+  })
+
+# Display the filtered data in a table
+  output$filteredTable <- renderTable({
+    if (nrow(filteredData()) > 0) {
+      filteredData() %>% select(year, rank, restaurant, location, country)
+    }
+  })
+
+# Display the details of selected points in a table
+  output$selectionTable <- renderTable({
+    brushedPoints <- brushedPoints(filteredData(), input$plotBrush, xvar = 'lng', yvar = 'lat')
+    if (nrow(brushedPoints) == 0) {
+      return(NULL)
+    }
+    brushedPoints %>% select(year, rank, restaurant, location, country) %>% unique()
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+
+
+
+```
+
+
+
+
+
+
+
